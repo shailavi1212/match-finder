@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Padel Match Finder</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://npmcdn.com/flatpickr/dist/l10n/he.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;700;900&display=swap" rel="stylesheet" />
+
+  <script type="importmap">
+    {
+      "imports": {
+        "firebase/app":       "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js",
+        "firebase/auth":      "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js"
+      }
+    }
+  </script>
+
+  <style>
+    :root { --royal:#002366; --gold:#D4AF37; --gold-light:#F0D060; }
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    body{
+      font-family:'Heebo',sans-serif; background:var(--royal); color:#fff; min-height:100vh;
+      background-image:
+        radial-gradient(ellipse at 80% 10%,rgba(212,175,55,.09) 0%,transparent 60%),
+        radial-gradient(ellipse at 10% 90%,rgba(212,175,55,.06) 0%,transparent 50%);
+    }
+    .court-lines{
+      position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.03;
+      background-image:linear-gradient(90deg,var(--gold) 1px,transparent 1px),linear-gradient(0deg,var(--gold) 1px,transparent 1px);
+      background-size:60px 60px;
+    }
+    .card{background:rgba(0,48,128,.55);backdrop-filter:blur(14px);border:1px solid rgba(212,175,55,.25);border-radius:18px;}
+    .field-label{display:block;font-size:.78rem;font-weight:700;color:var(--gold);margin-bottom:.5rem;letter-spacing:.06em;text-transform:uppercase;}
+    input[type="text"],input[type="tel"]{
+      background:rgba(0,21,64,.75);border:1px solid rgba(212,175,55,.38);color:#fff;
+      border-radius:10px;padding:.75rem 1rem;width:100%;outline:none;
+      font-family:'Heebo',sans-serif;font-size:1rem;transition:border-color .2s,box-shadow .2s;
+    }
+    input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,175,55,.15);}
+    input::placeholder{color:rgba(255,255,255,.3);}
+
+    /* ── Skill Bar ── */
+    #skillBarWrap{position:relative;width:100%;height:42px;cursor:pointer;user-select:none;touch-action:none;}
+    #skillTrack{
+      position:absolute;top:50%;left:0;right:0;transform:translateY(-50%);
+      height:8px;border-radius:999px;background:rgba(212,175,55,.16);border:1px solid rgba(212,175,55,.28);
+    }
+    .skill-notch{position:absolute;top:50%;width:2px;height:14px;background:rgba(212,175,55,.45);border-radius:1px;transform:translate(-50%,-50%);pointer-events:none;}
+    #skillFill{height:100%;border-radius:999px;width:0%;background:transparent;}
+    #skillThumb{
+      position:absolute;top:50%;display:none;width:22px;height:22px;border-radius:50%;
+      background:var(--gold);border:3px solid #fff;box-shadow:0 2px 10px rgba(212,175,55,.55);
+      transform:translate(-50%,-50%);pointer-events:none;left:0%;
+    }
+    #skillTicks{position:absolute;top:calc(50% + 11px);left:0;right:0;display:flex;justify-content:space-between;padding:0 4px;}
+    .skill-tick{font-size:.65rem;color:rgba(212,175,55,.5);font-weight:600;}
+    .skill-tick-major{font-size:.72rem;color:rgba(212,175,55,.75);font-weight:700;}
+    #skillValue{text-align:center;font-size:1.55rem;font-weight:900;color:var(--gold);min-height:1.9rem;line-height:1;margin-bottom:.3rem;}
+
+    /* ── Flatpickr ── */
+    .flatpickr-calendar{background:#001f5a!important;border:1px solid rgba(212,175,55,.45)!important;border-radius:12px!important;box-shadow:0 8px 30px rgba(0,0,0,.4)!important;font-family:'Heebo',sans-serif!important;direction:rtl;}
+    .flatpickr-calendar.inline{display:block!important;position:static!important;width:100%!important;}
+    .flatpickr-day{color:rgba(255,255,255,.82)!important;border-radius:8px!important;}
+    .flatpickr-day.selected,.flatpickr-day.selected:hover{background:var(--gold)!important;border-color:var(--gold)!important;color:var(--royal)!important;font-weight:800!important;}
+    .flatpickr-day:hover:not(.selected){background:rgba(212,175,55,.14)!important;}
+    .flatpickr-day.today:not(.selected){border-color:rgba(212,175,55,.4)!important;}
+    .flatpickr-day.flatpickr-disabled{color:rgba(255,255,255,.16)!important;}
+    .flatpickr-months .flatpickr-month{color:var(--gold)!important;fill:var(--gold)!important;}
+    .flatpickr-current-month,.flatpickr-current-month .numInputWrapper input{color:var(--gold)!important;font-weight:700!important;}
+    .flatpickr-weekday{color:rgba(212,175,55,.62)!important;font-weight:700!important;}
+    .flatpickr-prev-month svg,.flatpickr-next-month svg{fill:var(--gold)!important;}
+
+    /* ── Date accordion ── */
+    #dateSchedule{display:flex;flex-direction:column;gap:.75rem;margin-top:.6rem;}
+    .date-card{border:1px solid rgba(212,175,55,.28);border-radius:12px;overflow:hidden;transition:border-color .2s;}
+    .date-card.has-hours{border-color:rgba(212,175,55,.6);}
+    .date-card-header{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;background:rgba(212,175,55,.08);cursor:pointer;user-select:none;gap:.75rem;}
+    .date-card-header:hover{background:rgba(212,175,55,.13);}
+    .date-label{font-weight:700;font-size:1rem;color:#fff;}
+    .hours-badge{font-size:.72rem;font-weight:700;background:rgba(212,175,55,.18);color:var(--gold);border:1px solid rgba(212,175,55,.35);border-radius:999px;padding:.15rem .65rem;white-space:nowrap;flex-shrink:0;}
+    .hours-badge.filled{background:rgba(212,175,55,.28);}
+    .chevron{flex-shrink:0;transition:transform .25s;color:var(--gold);font-size:.85rem;}
+    .date-card.open .chevron{transform:rotate(180deg);}
+    .date-card-body{display:none;padding:.75rem;background:rgba(0,15,50,.3);border-top:1px solid rgba(212,175,55,.15);}
+    .date-card.open .date-card-body{display:block;}
+
+    /* ── Time buttons ── */
+    .time-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.4rem;}
+    .time-btn{padding:.5rem .2rem;border-radius:8px;border:1.5px solid rgba(212,175,55,.2);background:rgba(0,21,64,.4);cursor:pointer;font-family:'Heebo',sans-serif;font-size:.82rem;font-weight:600;color:rgba(255,255,255,.65);transition:all .13s;text-align:center;-webkit-tap-highlight-color:transparent;}
+    .time-btn:hover{border-color:rgba(212,175,55,.5);background:rgba(212,175,55,.08);color:#fff;}
+    .time-btn:active{transform:scale(.92);}
+    .time-btn.active{border-color:var(--gold);background:rgba(212,175,55,.22);color:var(--gold);font-weight:800;box-shadow:0 0 0 2px rgba(212,175,55,.2);}
+
+    /* ── Summary ── */
+    #summaryStrip{display:none;background:rgba(212,175,55,.1);border:1px solid rgba(212,175,55,.3);border-radius:10px;padding:.65rem 1rem;font-size:.82rem;color:var(--gold);font-weight:600;}
+    #summaryStrip.visible{display:block;}
+
+    /* ── Submit ── */
+    .btn-submit{background:linear-gradient(135deg,var(--gold),#b8941f);color:var(--royal);font-weight:900;font-size:1.1rem;border:none;border-radius:12px;padding:1rem 2rem;width:100%;cursor:pointer;font-family:'Heebo',sans-serif;box-shadow:0 4px 20px rgba(212,175,55,.3);transition:all .25s;}
+    .btn-submit:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(212,175,55,.45);}
+    .btn-submit:active{transform:translateY(0);}
+    .btn-submit:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+
+    /* ── Toast ── */
+    #toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(120px);background:var(--gold);color:var(--royal);padding:.85rem 1.75rem;border-radius:12px;font-weight:800;font-size:1rem;transition:transform .4s cubic-bezier(.34,1.56,.64,1);z-index:9999;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.3);}
+    #toast.show{transform:translateX(-50%) translateY(0);}
+    #toast.error{background:#c0392b;color:#fff;}
+
+    @keyframes fadeInUp{from{opacity:0;transform:translateY(18px);}to{opacity:1;transform:translateY(0);}}
+    .fade-in{animation:fadeInUp .5s ease both;}
+    .fade-in-2{animation:fadeInUp .5s .08s ease both;}
+    .form-gap{display:flex;flex-direction:column;gap:1.5rem;}
+  </style>
+</head>
+<body class="relative overflow-x-hidden">
+  <div class="court-lines"></div>
+
+  <header class="py-8 text-center fade-in relative z-10">
+    <div class="inline-flex items-center gap-3 mb-2">
+      <span class="text-4xl">🎾</span>
+      <h1 class="text-3xl md:text-4xl font-black tracking-tight" style="color:var(--gold)">Padel Match Finder</h1>
+    </div>
+    <p class="text-sm mt-1" style="color:rgba(255,255,255,.5)">מצא שותפים למשחק · הרשם לזמינות שלך</p>
+  </header>
+
+  <main class="max-w-lg mx-auto px-4 pb-16 relative z-10 fade-in-2">
+    <div class="card p-6 md:p-8 form-gap">
+
+      <div>
+        <label class="field-label">שם מלא</label>
+        <input type="text" id="playerName" placeholder="ישראל ישראלי" />
+      </div>
+
+      <div>
+        <label class="field-label">טלפון</label>
+        <input type="tel" id="playerPhone" placeholder="050-0000000" dir="ltr" />
+      </div>
+
+      <div>
+        <label class="field-label">רמת משחק (1 מתחיל · 5 מתקדם)</label>
+        <div id="skillValue">— גרור לבחור רמה —</div>
+        <div style="height:.4rem"></div>
+        <div id="skillBarWrap">
+          <div id="skillTrack">
+            <div id="skillFill"></div>
+            <div class="skill-notch" style="left:0%"></div>
+            <div class="skill-notch" style="left:25%"></div>
+            <div class="skill-notch" style="left:50%"></div>
+            <div class="skill-notch" style="left:75%"></div>
+            <div class="skill-notch" style="left:100%"></div>
+          </div>
+          <div id="skillThumb"></div>
+          <div id="skillTicks">
+            <span class="skill-tick-major">5</span>
+            <span class="skill-tick">4</span>
+            <span class="skill-tick">3</span>
+            <span class="skill-tick">2</span>
+            <span class="skill-tick-major">1</span>
+          </div>
+        </div>
+        <div style="height:1.4rem"></div>
+      </div>
+
+      <div>
+        <label class="field-label">בחר תאריכים (ניתן לבחור כמה שרוצים)</label>
+        <div id="calendarWrap"></div>
+      </div>
+
+      <div id="scheduleSection" style="display:none;">
+        <label class="field-label">בחר שעות לכל תאריך בנפרד</label>
+        <div id="dateSchedule"></div>
+        <div id="summaryStrip" style="margin-top:.75rem;"></div>
+      </div>
+
+      <button class="btn-submit" id="submitBtn" onclick="window._submitForm()">שלח זמינות 🎾</button>
+    </div>
+
+    <p style="text-align:center;margin-top:1.4rem;font-size:.82rem;color:rgba(255,255,255,.33);">
+      <a href="admin.html" style="color:inherit;text-decoration:none"
+         onmouseover="this.style.color='#D4AF37'" onmouseout="this.style.color='inherit'">ממשק מנהל →</a>
+    </p>
+  </main>
+
+  <div id="toast"></div>
+
+  <script type="module">
+    import { initializeApp }                             from 'firebase/app';
+    import { getFirestore, collection, addDoc }          from 'firebase/firestore';
+    import { getAuth, signInAnonymously }                from 'firebase/auth';
+
+    // ════════════════════════════════════════════════════════
+    // 🔥 PASTE YOUR FIREBASE CONFIG HERE
+    // Firebase Console → Project Settings → Your apps → </>
+    // ════════════════════════════════════════════════════════
+    const firebaseConfig = {
+      apiKey:            "YOUR_API_KEY",
+      authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId:         "YOUR_PROJECT_ID",
+      storageBucket:     "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId:             "YOUR_APP_ID"
+    };
+    // ════════════════════════════════════════════════════════
+
+    const app  = initializeApp(firebaseConfig);
+    const db   = getFirestore(app);
+    const auth = getAuth(app);
+
+    // Sign in anonymously so Firestore security rules allow writes
+    await signInAnonymously(auth);
+
+    /* ─── Time slots 06:00 → 00:00 ─── */
+    const TIME_SLOTS = [];
+    for (let h = 6; h <= 24; h++)
+      TIME_SLOTS.push((h===24?'00':String(h).padStart(2,'0'))+':00');
+
+    /* ─── State ─── */
+    let selectedSkill = null;
+    let selectedDates = [];
+    const dateHours   = {};
+
+    /* ══════════ SKILL BAR ══════════ */
+    const STEPS = [];
+    for (let i=10;i<=50;i++) STEPS.push(parseFloat((i/10).toFixed(1)));
+
+    const barWrap    = document.getElementById('skillBarWrap');
+    const fillEl     = document.getElementById('skillFill');
+    const thumbEl    = document.getElementById('skillThumb');
+    const skillValEl = document.getElementById('skillValue');
+    let dragging = false;
+
+    function applySkill(frac) {
+      const inv = 1 - frac;
+      const idx = Math.max(0,Math.min(STEPS.length-1,Math.round(inv*(STEPS.length-1))));
+      selectedSkill = STEPS[idx];
+      const pct = (1-idx/(STEPS.length-1))*100;
+      fillEl.style.width = pct+'%';
+      thumbEl.style.left = (100-pct)+'%';
+      thumbEl.style.display = 'block';
+      skillValEl.textContent = selectedSkill.toFixed(1);
+    }
+    function fracFrom(e){
+      const r=barWrap.getBoundingClientRect();
+      const x=e.touches?e.touches[0].clientX:e.clientX;
+      return Math.max(0,Math.min(1,(x-r.left)/r.width));
+    }
+    barWrap.addEventListener('mousedown',e=>{dragging=true;applySkill(fracFrom(e));});
+    document.addEventListener('mousemove',e=>{if(dragging)applySkill(fracFrom(e));});
+    document.addEventListener('mouseup',()=>{dragging=false;});
+    barWrap.addEventListener('touchstart',e=>{e.preventDefault();applySkill(fracFrom(e));},{passive:false});
+    barWrap.addEventListener('touchmove',e=>{e.preventDefault();applySkill(fracFrom(e));},{passive:false});
+
+    /* ══════════ CALENDAR ══════════ */
+    function formatDisplay(s){ const[,m,d]=s.split('-'); return`${d}/${m}`; }
+
+    const fpInstance = flatpickr('#calendarWrap',{
+      locale:'he',inline:true,mode:'multiple',minDate:'today',dateFormat:'Y-m-d',
+      onChange(dates){
+        const newDates=dates.map(d=>{
+          const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
+          return`${y}-${m}-${day}`;
+        }).sort();
+        Object.keys(dateHours).forEach(k=>{if(!newDates.includes(k))delete dateHours[k];});
+        newDates.forEach(k=>{if(!dateHours[k])dateHours[k]=new Set();});
+        selectedDates=newDates;
+        renderSchedule();
+      }
+    });
+
+    /* ══════════ SCHEDULE ACCORDION ══════════ */
+    function renderSchedule(){
+      const section=document.getElementById('scheduleSection');
+      const container=document.getElementById('dateSchedule');
+      if(!selectedDates.length){section.style.display='none';return;}
+      section.style.display='block';
+      const openStates={};
+      container.querySelectorAll('.date-card').forEach(c=>{openStates[c.dataset.date]=c.classList.contains('open');});
+      container.innerHTML='';
+      selectedDates.forEach((dateStr,i)=>{
+        const hours=dateHours[dateStr];
+        const isOpen=openStates[dateStr]!==undefined?openStates[dateStr]:i===0;
+        const card=document.createElement('div');
+        card.className='date-card'+(isOpen?' open':'')+(hours.size>0?' has-hours':'');
+        card.dataset.date=dateStr;
+        card.innerHTML=`
+          <div class="date-card-header">
+            <span class="date-label">📅 ${formatDisplay(dateStr)}</span>
+            <span class="hours-badge ${hours.size>0?'filled':''}" id="badge-${dateStr}">${hours.size>0?hours.size+' שעות':'לא נבחר'}</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="date-card-body"><div class="time-grid" id="grid-${dateStr}"></div></div>`;
+        card.querySelector('.date-card-header').addEventListener('click',()=>card.classList.toggle('open'));
+        container.appendChild(card);
+        const grid=card.querySelector('.time-grid');
+        TIME_SLOTS.forEach(t=>{
+          const btn=document.createElement('button');
+          btn.type='button';btn.className='time-btn'+(hours.has(t)?' active':'');
+          btn.setAttribute('dir','ltr');btn.textContent=t;
+          btn.addEventListener('click',function(e){
+            e.stopPropagation();
+            if(hours.has(t)){hours.delete(t);this.classList.remove('active');}
+            else{hours.add(t);this.classList.add('active');}
+            const badge=document.getElementById('badge-'+dateStr);
+            badge.textContent=hours.size>0?hours.size+' שעות':'לא נבחר';
+            badge.className='hours-badge'+(hours.size>0?' filled':'');
+            card.classList.toggle('has-hours',hours.size>0);
+            updateSummary();
+          });
+          grid.appendChild(btn);
+        });
+      });
+      updateSummary();
+    }
+
+    function updateSummary(){
+      const strip=document.getElementById('summaryStrip');
+      const total=Object.values(dateHours).reduce((s,set)=>s+set.size,0);
+      if(!total){strip.classList.remove('visible');return;}
+      strip.classList.add('visible');
+      const parts=selectedDates.filter(d=>dateHours[d]?.size>0)
+        .map(d=>`${formatDisplay(d)}: ${[...dateHours[d]].sort().join(', ')}`);
+      strip.innerHTML='✅ סיכום: '+parts.join(' &nbsp;|&nbsp; ');
+    }
+
+    /* ══════════ TOAST ══════════ */
+    function showToast(msg,isError=false){
+      const el=document.getElementById('toast');
+      el.textContent=msg;el.className=(isError?'error ':'')+' show';
+      setTimeout(()=>{el.className=isError?'error':'';},3500);
+    }
+
+    /* ══════════ SUBMIT ══════════ */
+    window._submitForm = async function(){
+      const name =document.getElementById('playerName').value.trim();
+      const phone=document.getElementById('playerPhone').value.trim();
+      if(!name)  return showToast('אנא הכנס שם מלא',true);
+      if(!phone) return showToast('אנא הכנס מספר טלפון',true);
+      if(!selectedSkill) return showToast('אנא בחר רמת משחק',true);
+      if(!selectedDates.length) return showToast('אנא בחר תאריך לפחות אחד',true);
+      const total=Object.values(dateHours).reduce((s,set)=>s+set.size,0);
+      if(!total) return showToast('אנא בחר שעה לפחות אחת',true);
+
+      const btn=document.getElementById('submitBtn');
+      btn.disabled=true;btn.textContent='שולח...';
+      try{
+        const col=collection(db,'padel_availability');
+        const writes=[];
+        selectedDates.forEach(date=>{
+          (dateHours[date]||new Set()).forEach(time=>{
+            writes.push(addDoc(col,{
+              name,phone,skill_level:selectedSkill,date,time_slot:time,
+              created_at:new Date().toISOString()
+            }));
+          });
+        });
+        await Promise.all(writes);
+        showToast(`✅ נשמרו ${writes.length} רשומות!`);
+        // Reset
+        document.getElementById('playerName').value='';
+        document.getElementById('playerPhone').value='';
+        fpInstance.clear();
+        fillEl.style.width='0%';thumbEl.style.display='none';
+        skillValEl.textContent='— גרור לבחור רמה —';
+        Object.keys(dateHours).forEach(k=>delete dateHours[k]);
+        selectedDates=[];selectedSkill=null;
+        document.getElementById('scheduleSection').style.display='none';
+        document.getElementById('dateSchedule').innerHTML='';
+        document.getElementById('summaryStrip').classList.remove('visible');
+      }catch(err){
+        console.error(err);
+        showToast('שגיאה: '+err.message,true);
+      }finally{
+        btn.disabled=false;btn.textContent='שלח זמינות 🎾';
+      }
+    };
+  </script>
+</body>
+</html>
